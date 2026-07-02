@@ -1,0 +1,210 @@
+-- i d k --
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+
+---------------------------------------------------
+-- GUI
+---------------------------------------------------
+local gui = Instance.new("ScreenGui")
+local frame = Instance.new("Frame")
+local button = Instance.new("TextButton")
+
+gui.Parent = player:WaitForChild("PlayerGui")
+gui.ResetOnSpawn = false
+
+frame.Parent = gui
+frame.Size = UDim2.new(0, 220, 0, 140)
+frame.Position = UDim2.new(0.05, 0, 0.5, 0)
+frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+frame.Visible = true
+
+button.Parent = frame
+button.Size = UDim2.new(0, 180, 0, 60)
+button.Position = UDim2.new(0.09, 0, 0.25, 0)
+button.Text = "NORMAL"
+button.TextColor3 = Color3.new(1,1,1)
+
+---------------------------------------------------
+-- RGB EFFECT
+---------------------------------------------------
+task.spawn(function()
+	while true do
+		for i = 0, 1, 0.01 do
+			if frame.Visible then
+				frame.BackgroundColor3 = Color3.fromHSV(i, 0.6, 0.8)
+				button.BackgroundColor3 = Color3.fromHSV((i + 0.5) % 1, 0.7, 0.9)
+			end
+			task.wait(0.03)
+		end
+	end
+end)
+
+---------------------------------------------------
+-- KEYBIND (F TOGGLE PANEL)
+---------------------------------------------------
+UserInputService.InputBegan:Connect(function(input, gp)
+	if gp then return end
+
+	if input.KeyCode == Enum.KeyCode.F then
+		frame.Visible = not frame.Visible
+	end
+end)
+
+---------------------------------------------------
+-- STATES
+---------------------------------------------------
+local state = 0
+local flying = false
+local bv, bg, flyConn
+
+---------------------------------------------------
+-- CHARACTER
+---------------------------------------------------
+local function getChar()
+	local char = player.Character or player.CharacterAdded:Wait()
+	local hum = char:WaitForChild("Humanoid")
+	local root = char:WaitForChild("HumanoidRootPart")
+	return char, hum, root
+end
+
+---------------------------------------------------
+-- RESET ON RESPAWN
+---------------------------------------------------
+local function resetAll()
+	state = 0
+	flying = false
+
+	if flyConn then flyConn:Disconnect() end
+	if bv then bv:Destroy() end
+	if bg then bg:Destroy() end
+
+	local _, hum = getChar()
+	hum.WalkSpeed = 16
+	hum.JumpPower = 50
+	hum.PlatformStand = false
+
+	button.Text = "NORMAL"
+end
+
+player.CharacterAdded:Connect(function()
+	task.wait(0.2)
+	resetAll()
+end)
+
+---------------------------------------------------
+-- APPLY STATES
+---------------------------------------------------
+local function applyState()
+	local _, hum = getChar()
+
+	if state == 0 then
+		hum.WalkSpeed = 16
+		hum.JumpPower = 50
+		button.Text = "NORMAL"
+
+	elseif state == 1 then
+		hum.WalkSpeed = 50
+		hum.JumpPower = 50
+		button.Text = "SPRINT 50"
+
+	elseif state == 2 then
+		hum.WalkSpeed = 16
+		hum.JumpPower = 200
+		button.Text = "JUMP INF"
+
+	elseif state == 3 then
+		button.Text = "FLY"
+		startFly()
+	end
+end
+
+---------------------------------------------------
+-- INPUT FOR FLY
+---------------------------------------------------
+local keys = {W=false,A=false,S=false,D=false,Up=false,Down=false}
+
+UserInputService.InputBegan:Connect(function(i,gp)
+	if gp then return end
+	if i.KeyCode == Enum.KeyCode.W then keys.W=true end
+	if i.KeyCode == Enum.KeyCode.A then keys.A=true end
+	if i.KeyCode == Enum.KeyCode.S then keys.S=true end
+	if i.KeyCode == Enum.KeyCode.D then keys.D=true end
+	if i.KeyCode == Enum.KeyCode.Space then keys.Up=true end
+	if i.KeyCode == Enum.KeyCode.LeftShift then keys.Down=true end
+end)
+
+UserInputService.InputEnded:Connect(function(i)
+	if i.KeyCode == Enum.KeyCode.W then keys.W=false end
+	if i.KeyCode == Enum.KeyCode.A then keys.A=false end
+	if i.KeyCode == Enum.KeyCode.S then keys.S=false end
+	if i.KeyCode == Enum.KeyCode.D then keys.D=false end
+	if i.KeyCode == Enum.KeyCode.Space then keys.Up=false end
+	if i.KeyCode == Enum.KeyCode.LeftShift then keys.Down=false end
+end)
+
+---------------------------------------------------
+-- FLY SYSTEM
+---------------------------------------------------
+function startFly()
+	if flying then return end
+	flying = true
+
+	local _, hum, root = getChar()
+	hum.PlatformStand = true
+
+	bv = Instance.new("BodyVelocity")
+	bv.MaxForce = Vector3.new(1e9,1e9,1e9)
+	bv.Parent = root
+
+	bg = Instance.new("BodyGyro")
+	bg.MaxTorque = Vector3.new(1e9,1e9,1e9)
+	bg.Parent = root
+
+	flyConn = RunService.RenderStepped:Connect(function()
+		local cam = workspace.CurrentCamera
+		bg.CFrame = cam.CFrame
+
+		local dir = Vector3.zero
+		local speed = 80
+
+		if keys.W then dir += cam.CFrame.LookVector end
+		if keys.S then dir -= cam.CFrame.LookVector end
+		if keys.A then dir -= cam.CFrame.RightVector end
+		if keys.D then dir += cam.CFrame.RightVector end
+		if keys.Up then dir += Vector3.new(0,1,0) end
+		if keys.Down then dir -= Vector3.new(0,1,0) end
+
+		if dir.Magnitude > 0 then
+			bv.Velocity = dir.Unit * speed
+		else
+			bv.Velocity = Vector3.zero
+		end
+	end)
+end
+
+function stopFly()
+	flying = false
+	if flyConn then flyConn:Disconnect() end
+	if bv then bv:Destroy() end
+	if bg then bg:Destroy() end
+
+	local _, hum = getChar()
+	hum.PlatformStand = false
+end
+
+---------------------------------------------------
+-- BUTTON CONTROL
+---------------------------------------------------
+button.MouseButton1Click:Connect(function()
+	if state == 3 then
+		stopFly()
+	end
+
+	state += 1
+	if state > 3 then state = 0 end
+
+	applyState()
+end)
